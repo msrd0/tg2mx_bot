@@ -1,0 +1,15 @@
+# rust/cargo
+/target/
+
+# git
+*.orig
+
+# emacs
+*~
+\#*#
+.#*#
+
+# intellij
+/.idea/
+*.ipr
+*.iml
