@@ -1467,6 +1467,7 @@ dependencies = [
  "indoc",
  "log",
  "matrix-sdk",
+ "once_cell",
  "pretty_env_logger",
  "tokio",
  "tracing",
