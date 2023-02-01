@@ -1,4 +1,5 @@
-use crate::{ADMIN, HOMESERVER, MATRIX_ID, PASSWORD};
+use crate::{mxbot::state::write_queue, ADMIN, HOMESERVER, MATRIX_ID, PASSWORD};
+use futures_util::future::select;
 use indoc::indoc;
 use log::{error, info, warn};
 use matrix_sdk::{
@@ -13,6 +14,16 @@ use matrix_sdk::{
 	},
 	Client
 };
+use std::time::Duration;
+use tokio::time::sleep;
+
+mod import;
+mod migrate;
+mod state;
+
+use import::import;
+use migrate::migrate;
+use state::{read_queue, Job};
 
 async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Client) {
 	// ignore member events for other users
@@ -62,6 +73,31 @@ async fn reply(
 		content.make_reply_to(&ev.into_full_event(room_id), ForwardThread::Yes)
 	)
 	.await;
+}
+
+async fn enqueue_impl(
+	room: Joined,
+	ev: OriginalSyncRoomMessageEvent,
+	job: Job
+) -> anyhow::Result<()> {
+	let mut q = read_queue(&room.client()).await?;
+	q.q.push_back(job);
+	write_queue(&room.client(), &q).await?;
+
+	reply(
+		room,
+		ev,
+		RoomMessageEventContent::text_plain("Your job was queued")
+	)
+	.await;
+	Ok(())
+}
+
+async fn enqueue(room: Joined, ev: OriginalSyncRoomMessageEvent, job: Job) {
+	match enqueue_impl(room, ev, job).await {
+		Ok(_) => info!("Sucessfully enqueued job"),
+		Err(err) => error!("Error enqueueing job: {err}")
+	}
 }
 
 async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: Client) {
@@ -120,25 +156,11 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 		}
 		// import tg sticker pack
 		else if let Some(pack) = body.strip_prefix("!import ") {
-			reply(
-				room,
-				ev,
-				RoomMessageEventContent::text_plain(format!(
-					"UNIMPLEMENTED: Import tg sticker pack {pack}"
-				))
-			)
-			.await;
+			enqueue(room, ev, Job::Import(pack.to_owned())).await;
 		}
 		// import maunium sticker pack
 		else if let Some(pack) = body.strip_prefix("!migrate ") {
-			reply(
-				room,
-				ev,
-				RoomMessageEventContent::text_plain(format!(
-					"UNIMPLEMENTED: Import maunium sticker pack {pack}"
-				))
-			)
-			.await;
+			enqueue(room, ev, Job::Migrate(pack.to_owned())).await;
 		}
 		// unknown command
 		else {
@@ -174,8 +196,42 @@ pub(super) async fn run() -> anyhow::Result<()> {
 	client.add_event_handler(message_handler);
 
 	// keep syncing forever
-	client
-		.sync(SyncSettings::default().token(response.next_batch))
-		.await?;
+	let sync_fut = async {
+		client
+			.sync(SyncSettings::default().token(response.next_batch))
+			.await?;
+		anyhow::Ok(())
+	};
+
+	// keep working the queue
+	let queue_fut = async {
+		loop {
+			sleep(Duration::from_secs(1)).await;
+			let mut q = read_queue(&client).await?;
+			if let Some(job) = q.q.pop_front() {
+				write_queue(&client, &q).await?;
+
+				let res = match &job {
+					Job::Import(pack) => import(&client, pack).await,
+					Job::Migrate(pack) => migrate(&client, pack).await
+				};
+				if let Err(err) = res {
+					error!("Failed to run queued job {job:?}: {err}");
+					let mut q = read_queue(&client).await?;
+					q.q.push_back(job);
+					write_queue(&client, &q).await?;
+				}
+			}
+		}
+
+		// no, this is necessary so that all futures have the same return type
+		#[allow(unreachable_code)]
+		anyhow::Ok(())
+	};
+
+	select(Box::pin(sync_fut), Box::pin(queue_fut))
+		.await
+		.factor_first()
+		.0?;
 	Ok(())
 }
