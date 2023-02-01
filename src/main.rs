@@ -28,7 +28,7 @@ async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Clien
 	if let Room::Invited(room) = room {
 		let room_id = room.room_id();
 		match room.accept_invitation().await {
-			Ok(_) => info!("Successfully join room {room_id}"),
+			Ok(_) => info!("Successfully joined room {room_id}"),
 			Err(err) => error!("Error joining room {room_id}: {err}")
 		}
 	}
@@ -76,18 +76,36 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 			reply(
 				room,
 				ev,
-				RoomMessageEventContent::text_plain(indoc! {r#"
-					This is tg2mx_bot, a bot that can import sticker packs from telegram
-					and migrate maunium's sticker packs to MSC2545 room sticker packs.
+				RoomMessageEventContent::text_html(
+					indoc! {r#"
+						This is tg2mx_bot, a bot that can import sticker packs from
+						telegram and migrate maunium's sticker packs to MSC2545 room
+						sticker packs.
 
-					The following commands are available:
+						The following commands are available:
 
-					!help  --  Show this help message
+						!help  --  Show this help message
 
-					!import <pack>  --  Import a telegram sticker pack.
+						!import <pack>  --  Import a telegram sticker pack.
 
-					!migrate <pack>  --  Migrate a maunium sticker pack.
-				"#})
+						!migrate <pack>  --  Migrate a maunium sticker pack.
+					"#},
+					indoc! {r#"
+						<p>This is tg2mx_bot, a bot that can import sticker packs from
+						telegram and migrate maunium's sticker packs to MSC2545 room
+						sticker packs.</p>
+
+						<p>The following commands are available:</p>
+
+						<ul>
+						  <li><code>!help</code>  --  Show this help message</li>
+						  <li><code>!import</code> &lt;pack&gt;  --  Import a telegram
+						      sticker pack.</li>
+						  <li><code>!migrate</code> &lt;pack&gt;  --  Migrate a maunium
+						      sticker pack.</li>
+						</ul>
+					"#}
+				)
 			)
 			.await;
 		}
