@@ -1,6 +1,17 @@
 use log::error;
-use matrix_sdk::{room::Joined, ruma::serde::Raw, Client};
-use ruma::events::room::message::OriginalRoomMessageEvent;
+use matrix_sdk::{
+	room::Joined,
+	ruma::{
+		events::{
+			room::message::OriginalRoomMessageEvent, MessageLikeEventContent,
+			OriginalMessageLikeEvent
+		},
+		serde::Raw,
+		MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId
+	},
+	Client
+};
+use monostate::MustBe;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -54,19 +65,41 @@ where
 
 #[derive(Default, Deserialize, Serialize)]
 pub(super) struct Queue {
-	pub(super) q: VecDeque<Job>
+	pub(super) q: VecDeque<QueuedJob>
+}
+
+/// because serde always passes an argument
+fn default<T, U: Default>(_this: &T) -> U {
+	U::default()
+}
+
+#[rustfmt::skip] // sorry but rustfmt can't handle comments in structs
+#[derive(Serialize)]
+#[serde(remote = "OriginalMessageLikeEvent")]
+struct OriginalMessageLikeEventDef<C: MessageLikeEventContent> {
+	content: C,
+	event_id: OwnedEventId,
+	sender: OwnedUserId,
+	origin_server_ts: MilliSecondsSinceUnixEpoch,
+	room_id: OwnedRoomId,
+
+	// unsigned ignored as we don't care if we use the actual data or the default value
+
+	// we need to serialize the message type eventhough it's not included
+	#[serde(rename = "type", getter = "default")]
+	ty: MustBe!("m.room.message")
 }
 
 #[derive(Deserialize, Serialize)]
 pub(super) struct QueuedJob {
+	#[serde(serialize_with = "OriginalMessageLikeEventDef::serialize")]
 	pub(super) ev: OriginalRoomMessageEvent,
 
-	#[serde(flatten)]
 	pub(super) job: Job
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(tag = "type", content = "job")]
+#[serde(tag = "type", content = "pack")]
 pub(super) enum Job {
 	Import(String),
 	Migrate(String)

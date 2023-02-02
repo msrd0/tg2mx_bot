@@ -24,6 +24,7 @@ mod import;
 mod migrate;
 mod state;
 
+use self::state::QueuedJob;
 use import::import;
 use migrate::migrate;
 use ruma::events::{reaction::ReactionEventContent, relation::Annotation};
@@ -80,7 +81,6 @@ async fn reply(
 }
 
 async fn react(room: Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
-	let room_id = room.room_id().to_owned();
 	send(
 		room,
 		ReactionEventContent::new(Annotation::new(ev.event_id, body.to_owned()))
@@ -94,7 +94,10 @@ async fn enqueue_impl(
 	job: Job
 ) -> anyhow::Result<()> {
 	let mut q = read_queue(&room.client()).await?;
-	q.q.push_back(job);
+	q.q.push_back(QueuedJob {
+		ev: ev.clone().into_full_event(room.room_id().to_owned()),
+		job
+	});
 	write_queue(&room.client(), &q).await?;
 
 	react(room, ev, "👍").await;
@@ -219,12 +222,12 @@ pub(super) async fn run() -> anyhow::Result<()> {
 			if let Some(job) = q.q.pop_front() {
 				write_queue(&client, &q).await?;
 
-				let res = match &job {
+				let res = match &job.job {
 					Job::Import(pack) => import(&client, pack).await,
 					Job::Migrate(pack) => migrate(&client, pack).await
 				};
 				if let Err(err) = res {
-					error!("Failed to run queued job {job:?}: {err}");
+					error!("Failed to run queued job {:?}: {err}", job.job);
 					let mut q = read_queue(&client).await?;
 					q.q.push_back(job);
 					write_queue(&client, &q).await?;
