@@ -1171,7 +1171,7 @@ dependencies = [
 [[package]]
 name = "mstickerlib"
 version = "0.0.1"
-source = "git+https://github.com/luckyturtledev/mstickereditor?rev=2ec7ad5c336d49c2f0e4c92ad8c206e6af0044f3#2ec7ad5c336d49c2f0e4c92ad8c206e6af0044f3"
+source = "git+https://github.com/luckyturtledev/mstickereditor?rev=92cbb2d3aaaa6e77206bef9ffbbbc402e67fc901#92cbb2d3aaaa6e77206bef9ffbbbc402e67fc901"
 dependencies = [
  "anyhow",
  "colored",
