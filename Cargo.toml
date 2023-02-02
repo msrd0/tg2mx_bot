@@ -24,3 +24,8 @@ git = "https://github.com/matrix-org/matrix-rust-sdk"
 rev = "5dbee7dcdc2bfd0a46ec883ba1b88faa412582e3"
 features = ["rustls-tls"]
 default-features = false
+
+[dependencies.ruma]
+git = "https://github.com/ruma/ruma"
+rev = "00045e559f864eabff08295d603f7b3238288b6f"
+features = ["unstable-msc2677"]

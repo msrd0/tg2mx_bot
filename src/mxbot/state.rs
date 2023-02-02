@@ -1,15 +1,13 @@
-use matrix_sdk::{
-	room::Joined,
-	ruma::{events::StateEventContent, serde::Raw},
-	Client
-};
+use log::error;
+use matrix_sdk::{room::Joined, ruma::serde::Raw, Client};
+use ruma::events::room::message::OriginalRoomMessageEvent;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::VecDeque;
 
 pub(super) async fn read_account_data<T>(
 	client: &Client,
 	key: &str
-) -> anyhow::Result<Option<T>>
+) -> anyhow::Result<serde_json::Result<Option<T>>>
 where
 	T: DeserializeOwned
 {
@@ -18,7 +16,7 @@ where
 		.account_data_raw(key.into())
 		.await?
 		.map(|ev| ev.deserialize_as())
-		.transpose()?)
+		.transpose())
 }
 
 pub(super) async fn write_account_data<T>(
@@ -59,6 +57,14 @@ pub(super) struct Queue {
 	pub(super) q: VecDeque<Job>
 }
 
+#[derive(Deserialize, Serialize)]
+pub(super) struct QueuedJob {
+	pub(super) ev: OriginalRoomMessageEvent,
+
+	#[serde(flatten)]
+	pub(super) job: Job
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "job")]
 pub(super) enum Job {
@@ -67,9 +73,13 @@ pub(super) enum Job {
 }
 
 pub(super) async fn read_queue(client: &Client) -> anyhow::Result<Queue> {
-	read_account_data(client, "de.msrd0.tg2mx_bot.queue")
-		.await
-		.map(|q| q.unwrap_or_default())
+	Ok(read_account_data(client, "de.msrd0.tg2mx_bot.queue")
+		.await?
+		.unwrap_or_else(|err| {
+			error!("Failed to deserialize account data: {err}");
+			None
+		})
+		.unwrap_or_default())
 }
 
 pub(super) async fn write_queue(client: &Client, q: &Queue) -> anyhow::Result<()> {

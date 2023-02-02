@@ -1470,6 +1470,7 @@ dependencies = [
  "matrix-sdk",
  "once_cell",
  "pretty_env_logger",
+ "ruma",
  "serde",
  "serde_json",
  "tokio",

@@ -5,12 +5,15 @@ use log::{error, info, warn};
 use matrix_sdk::{
 	config::SyncSettings,
 	room::{Joined, Room},
-	ruma::events::room::{
-		member::StrippedRoomMemberEvent,
-		message::{
-			ForwardThread, MessageType, OriginalSyncRoomMessageEvent,
-			RoomMessageEventContent
-		}
+	ruma::events::{
+		room::{
+			member::StrippedRoomMemberEvent,
+			message::{
+				ForwardThread, MessageType, OriginalSyncRoomMessageEvent,
+				RoomMessageEventContent
+			}
+		},
+		MessageLikeEventContent
 	},
 	Client
 };
@@ -23,6 +26,7 @@ mod state;
 
 use import::import;
 use migrate::migrate;
+use ruma::events::{reaction::ReactionEventContent, relation::Annotation};
 use state::{read_queue, Job};
 
 async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Client) {
@@ -54,7 +58,7 @@ async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Clien
 	}
 }
 
-async fn send(room: Joined, content: RoomMessageEventContent) {
+async fn send(room: Joined, content: impl MessageLikeEventContent) {
 	let room_id = room.room_id();
 	match room.send(content, None).await {
 		Ok(_) => info!("Sent message to room {room_id}"),
@@ -75,6 +79,15 @@ async fn reply(
 	.await;
 }
 
+async fn react(room: Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
+	let room_id = room.room_id().to_owned();
+	send(
+		room,
+		ReactionEventContent::new(Annotation::new(ev.event_id, body.to_owned()))
+	)
+	.await;
+}
+
 async fn enqueue_impl(
 	room: Joined,
 	ev: OriginalSyncRoomMessageEvent,
@@ -84,12 +97,7 @@ async fn enqueue_impl(
 	q.q.push_back(job);
 	write_queue(&room.client(), &q).await?;
 
-	reply(
-		room,
-		ev,
-		RoomMessageEventContent::text_plain("Your job was queued")
-	)
-	.await;
+	react(room, ev, "👍").await;
 	Ok(())
 }
 
