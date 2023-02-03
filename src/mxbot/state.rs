@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use matrix_sdk::{
 	room::Joined,
 	ruma::{
@@ -112,9 +112,18 @@ pub(super) async fn read_queue(client: &Client) -> anyhow::Result<Queue> {
 			error!("Failed to deserialize account data: {err}");
 			None
 		})
+		.map(|q: Queue| {
+			info!("Read queue with {} jobs", q.q.len());
+			q
+		})
 		.unwrap_or_default())
 }
 
 pub(super) async fn write_queue(client: &Client, q: &Queue) -> anyhow::Result<()> {
-	write_account_data(client, "de.msrd0.tg2mx_bot.queue", q).await
+	info!("Writing queue with {} jobs", q.q.len());
+	write_account_data(client, "de.msrd0.tg2mx_bot.queue", q).await?;
+	if read_queue(client).await?.q.len() != q.q.len() {
+		panic!("WTF?!?");
+	}
+	Ok(())
 }

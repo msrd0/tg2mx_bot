@@ -24,11 +24,21 @@ mod import;
 mod migrate;
 mod state;
 
-use self::state::QueuedJob;
+use self::state::{Queue, QueuedJob};
 use import::import;
 use migrate::migrate;
-use ruma::events::{reaction::ReactionEventContent, relation::Annotation};
+use ruma::{
+	events::{reaction::ReactionEventContent, relation::Annotation},
+	UserId
+};
 use state::{read_queue, Job};
+
+fn is_admin(sender: &UserId) -> bool {
+	ADMIN
+		.as_deref()
+		.map(|admins| admins.split([',', ' ']).any(|admin| admin == sender))
+		.unwrap_or(true)
+}
 
 async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Client) {
 	// ignore member events for other users
@@ -40,12 +50,7 @@ async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Clien
 		let room_id = room.room_id();
 
 		// ignore events that weren't sent by an admin
-		let sender = ev.sender.as_str();
-		if !ADMIN
-			.as_deref()
-			.map(|admins| admins.split([',', ' ']).any(|admin| admin == sender))
-			.unwrap_or(true)
-		{
+		if !is_admin(&ev.sender) {
 			warn!("Rejecting invitation for {room_id}");
 			room.reject_invitation().await.ok();
 		}
@@ -100,7 +105,7 @@ async fn enqueue_impl(
 	});
 	write_queue(&room.client(), &q).await?;
 
-	react(room, ev, "👍").await;
+	react(room, ev, "⏱️").await;
 	Ok(())
 }
 
@@ -173,6 +178,17 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 		else if let Some(pack) = body.strip_prefix("!migrate ") {
 			enqueue(room, ev, Job::Migrate(pack.to_owned())).await;
 		}
+		// clear the queue
+		else if body == "!clear queue" && is_admin(&ev.sender) {
+			let emoji = match write_queue(&client, &Queue::default()).await {
+				Ok(_) => "✅",
+				Err(err) => {
+					error!("Failed to clear queue: {err}");
+					"🟥"
+				}
+			};
+			react(room, ev, emoji).await;
+		}
 		// unknown command
 		else {
 			reply(
@@ -197,6 +213,11 @@ pub(super) async fn run() -> anyhow::Result<()> {
 		.initial_device_display_name("tg2mx bot")
 		.send()
 		.await?;
+	client
+		.account()
+		.set_display_name(Some("TG2MX Sticker Import BOT"))
+		.await
+		.ok();
 	info!("Logged in successfully");
 
 	// throw away inital sync - this means we don't reply to old messages
