@@ -1,3 +1,5 @@
+use crate::{HOMESERVER, MATRIX_ID};
+use anyhow::anyhow;
 use log::{error, info};
 use matrix_sdk::{
 	room::Joined,
@@ -12,6 +14,7 @@ use matrix_sdk::{
 	Client
 };
 use monostate::MustBe;
+use mstickerlib::get_client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -22,12 +25,24 @@ pub(super) async fn read_account_data<T>(
 where
 	T: DeserializeOwned
 {
-	Ok(client
-		.account()
-		.account_data_raw(key.into())
+	let response = get_client()
+		.await
+		.get(format!(
+			"{}_matrix/client/v3/user/{}/account_data/{key}?access_token={}",
+			client.homeserver().await,
+			client
+				.user_id()
+				.ok_or_else(|| anyhow!("How can we not have a user id?"))?,
+			client
+				.access_token()
+				.ok_or_else(|| anyhow!("How can we not have an access token?"))?
+		))
+		.send()
 		.await?
-		.map(|ev| ev.deserialize_as())
-		.transpose())
+		.error_for_status()?
+		.bytes()
+		.await?;
+	Ok(serde_json::from_slice(&response))
 }
 
 pub(super) async fn write_account_data<T>(
@@ -122,8 +137,5 @@ pub(super) async fn read_queue(client: &Client) -> anyhow::Result<Queue> {
 pub(super) async fn write_queue(client: &Client, q: &Queue) -> anyhow::Result<()> {
 	info!("Writing queue with {} jobs", q.q.len());
 	write_account_data(client, "de.msrd0.tg2mx_bot.queue", q).await?;
-	if read_queue(client).await?.q.len() != q.q.len() {
-		panic!("WTF?!?");
-	}
 	Ok(())
 }
