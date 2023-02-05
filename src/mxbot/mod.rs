@@ -17,21 +17,22 @@ use matrix_sdk::{
 	},
 	Client
 };
-use std::time::Duration;
-use tokio::time::sleep;
-
-mod import;
-mod migrate;
-mod state;
-
-use self::state::{Queue, QueuedJob};
-use import::import;
-use migrate::migrate;
 use ruma::{
 	events::{reaction::ReactionEventContent, relation::Annotation},
 	UserId
 };
-use state::{read_queue, Job};
+use std::time::Duration;
+use tokio::time::sleep;
+
+mod db;
+mod import;
+mod migrate;
+mod state;
+
+use anyhow::bail;
+use import::import;
+use migrate::migrate;
+use state::{read_queue, Job, Queue, QueuedJob};
 
 fn is_admin(sender: &UserId) -> bool {
 	ADMIN
@@ -203,6 +204,19 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 	}
 }
 
+async fn run_queued_job(client: &Client, job: &QueuedJob) -> anyhow::Result<()> {
+	let Some(Room::Joined(room)) = client.get_room(&job.ev.room_id) else {
+		bail!("Failed to find room for job {job:?}")
+	};
+
+	match &job.job {
+		Job::Import(pack) => import(client, pack).await?,
+		Job::Migrate(pack) => migrate(room, pack).await?
+	};
+
+	Ok(())
+}
+
 pub(super) async fn run() -> anyhow::Result<()> {
 	let client = Client::builder()
 		.homeserver_url(HOMESERVER.as_deref().unwrap())
@@ -243,11 +257,7 @@ pub(super) async fn run() -> anyhow::Result<()> {
 			if let Some(job) = q.q.pop_front() {
 				write_queue(&client, &q).await?;
 
-				let res = match &job.job {
-					Job::Import(pack) => import(&client, pack).await,
-					Job::Migrate(pack) => migrate(&client, pack).await
-				};
-				if let Err(err) = res {
+				if let Err(err) = run_queued_job(&client, &job).await {
 					error!("Failed to run queued job {:?}: {err}", job.job);
 					let mut q = read_queue(&client).await?;
 					q.q.push_back(job);

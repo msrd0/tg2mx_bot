@@ -1,5 +1,5 @@
-use crate::{HOMESERVER, MATRIX_ID};
 use anyhow::anyhow;
+use indexmap::IndexMap;
 use log::{error, info};
 use matrix_sdk::{
 	room::Joined,
@@ -14,9 +14,9 @@ use matrix_sdk::{
 	Client
 };
 use monostate::MustBe;
-use mstickerlib::get_client;
+use mstickerlib::{database, get_client, matrix::sticker_formats::ponies};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::{borrow::Borrow, collections::VecDeque};
 
 pub(super) async fn read_account_data<T>(
 	client: &Client,
@@ -60,8 +60,22 @@ where
 	Ok(())
 }
 
+pub(super) async fn read_room_state<T>(
+	room: &Joined,
+	key: &str,
+	state_key: Option<&str>
+) -> anyhow::Result<serde_json::Result<Option<T>>>
+where
+	T: DeserializeOwned
+{
+	let ev = room
+		.get_state_event(key.into(), state_key.unwrap_or_default())
+		.await?;
+	Ok(ev.map(|ev| ev.deserialize_as()).transpose())
+}
+
 pub(super) async fn write_room_state<T>(
-	room: Joined,
+	room: &Joined,
 	key: &str,
 	state_key: Option<&str>,
 	content: T
@@ -105,7 +119,7 @@ struct OriginalMessageLikeEventDef<C: MessageLikeEventContent> {
 	ty: MustBe!("m.room.message")
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(super) struct QueuedJob {
 	#[serde(serialize_with = "OriginalMessageLikeEventDef::serialize")]
 	pub(super) ev: OriginalRoomMessageEvent,
@@ -138,4 +152,52 @@ pub(super) async fn write_queue(client: &Client, q: &Queue) -> anyhow::Result<()
 	info!("Writing queue with {} jobs", q.q.len());
 	write_account_data(client, "de.msrd0.tg2mx_bot.queue", q).await?;
 	Ok(())
+}
+
+#[derive(Default, Deserialize, Serialize)]
+#[serde(transparent)]
+pub(super) struct MediaMap {
+	pub(super) map: IndexMap<MediaHash, MediaCache>
+}
+
+#[derive(Deserialize, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
+pub(super) struct MediaHash(
+	#[serde(with = "serde_big_array::BigArray")] pub(super) database::Hash
+);
+
+impl Borrow<database::Hash> for MediaHash {
+	fn borrow(&self) -> &database::Hash {
+		&self.0
+	}
+}
+
+#[derive(Deserialize, Serialize)]
+pub(super) struct MediaCache {
+	pub(super) url: String
+}
+
+pub(super) async fn read_media_map(client: &Client) -> anyhow::Result<Option<MediaMap>> {
+	Ok(read_account_data(client, "de.msrd0.tg2mx_bot.media_map")
+		.await?
+		.unwrap_or_else(|err| {
+			error!("Failed to deserialize account data: {err}");
+			None
+		})
+		.unwrap_or_default())
+}
+
+pub(super) async fn write_media_map(
+	client: &Client,
+	map: &MediaMap
+) -> anyhow::Result<()> {
+	write_account_data(client, "de.msrd0.tg2mx_bot.media_map", map).await?;
+	Ok(())
+}
+
+pub(super) async fn read_stickerpack(
+	room: &Joined,
+	name: &str
+) -> anyhow::Result<Option<ponies::StickerPack>> {
+	Ok(read_room_state(room, "im.ponies.room_emotes", Some(name)).await??)
 }
