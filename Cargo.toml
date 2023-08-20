@@ -28,6 +28,6 @@ tracing = { version = "0.1", features = ["log"] }
 
 [dependencies.matrix-sdk]
 git = "https://github.com/matrix-org/matrix-rust-sdk"
-rev = "efdeba79f9e0acf8a9dc55c7e676d17f8158102b"
+rev = "18e6f1036727ba5833be4b66900efe34bd29efc6"
 features = ["rustls-tls"]
 default-features = false
