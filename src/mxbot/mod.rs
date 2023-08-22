@@ -125,8 +125,8 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 
 	if let Room::Joined(room) = room {
 		let MessageType::Text(text_content) = ev.content.msgtype.clone() else {
-            return;
-        };
+			return;
+		};
 
 		let body = text_content.body.trim_end();
 		if !body.starts_with('!') {
