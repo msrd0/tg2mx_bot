@@ -884,6 +884,7 @@ checksum = "d5477fe2230a79769d8dc68e0eabf5437907c0457a5614a9e8dddb67f65eb65d"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.0",
+ "serde",
 ]
 
 [[package]]
@@ -1232,14 +1233,14 @@ dependencies = [
 [[package]]
 name = "mstickerlib"
 version = "0.0.1"
-source = "git+https://github.com/luckyturtledev/mstickereditor?rev=c33dae0cfe1a523e0c8301334cb60e9ec4cdf24b#c33dae0cfe1a523e0c8301334cb60e9ec4cdf24b"
+source = "git+https://github.com/luckyturtledev/mstickereditor?rev=c0353b1188d2a48711e6904e602514e877e44d02#c0353b1188d2a48711e6904e602514e877e44d02"
 dependencies = [
  "anyhow",
  "colored",
  "flate2",
  "futures-util",
  "generic-array",
- "indexmap 1.9.3",
+ "indexmap 2.0.0",
  "indicatif",
  "log",
  "lottieconv",
@@ -1883,9 +1884,9 @@ dependencies = [
 
 [[package]]
 name = "serde-big-array"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3323f09a748af288c3dc2474ea6803ee81f118321775bffa3ac8f7e65c5e90e7"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
 dependencies = [
  "serde",
 ]
@@ -2016,15 +2017,15 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "strum_macros"
-version = "0.24.3"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
+checksum = "ad8d03b598d3d0fff69bf533ee3ef19b8eeb342729596df84bcc7e1f96ec4059"
 dependencies = [
  "heck",
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 1.0.109",
+ "syn 2.0.29",
 ]
 
 [[package]]
@@ -2085,7 +2086,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "heck",
- "indexmap 1.9.3",
+ "indexmap 2.0.0",
  "indoc",
  "log",
  "matrix-sdk",
