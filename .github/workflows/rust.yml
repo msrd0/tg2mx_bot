@@ -1,0 +1,55 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+env:
+  RUST_BACKTRACE: "1"
+  RUST_LOG: "info"
+  # speed up build by using clang/lld
+  CC: "clang-14"
+  CXX: "clang++-14"
+  LD: "clang-14"
+  LDFLAGS: "-fuse-ld=lld-14"
+  RUSTFLAGS: "-C linker=clang-14 -C link-arg=-fuse-ld=lld-14"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - toolchain: "stable"
+          - toolchain: "nightly"
+    name: "Test (Rust ${{matrix.rust.toolchain}})"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "${{matrix.rust.toolchain}}"
+        id: "rust-toolchain"
+      
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}}"
+      
+      - run: cargo test --workspace --locked
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
