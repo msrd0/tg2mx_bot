@@ -25,11 +25,13 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 mod db;
+mod err;
 mod import;
 mod migrate;
 mod state;
 
 use anyhow::bail;
+use err::build_err_msg;
 use import::import;
 use migrate::migrate;
 use state::{read_queue, Job, Queue, QueuedJob};
@@ -209,13 +211,40 @@ async fn run_queued_job(client: &Client, job: &QueuedJob) -> anyhow::Result<()> 
 		bail!("Failed to find room for job {job:?}")
 	};
 
-	match &job.job {
-		Job::Import(pack) => import(client, pack).await?,
-		Job::Migrate(pack) => migrate(&room, pack).await?
+	let res = match &job.job {
+		Job::Import(pack) => import(client, pack).await,
+		Job::Migrate(pack) => migrate(&room, pack).await
 	};
 
-	react(&room, job.ev.clone().into(), "✅").await;
+	let ev = job.ev.clone().into();
+	match &res {
+		Ok(()) => react(&room, ev, "✅").await,
+		Err(err) => {
+			error!("Failed to execute job {job:?}: {err:?}");
+			react(&room, ev.clone(), "🟥").await;
+			reply(
+				&room,
+				ev,
+				RoomMessageEventContent::text_html(
+					"Failed to execute your job.",
+					format!(
+						indoc! {r#"
+							Failed to execute your job.
 
+							<details><summary>Click to see details</summary>
+
+							{}
+							</details>
+						"#},
+						build_err_msg(err)
+					)
+				)
+			)
+			.await;
+		}
+	}
+
+	// we don't want to requeue jobs after we have sent an error message already
 	Ok(())
 }
 
