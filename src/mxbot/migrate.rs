@@ -1,4 +1,5 @@
 use super::state::read_stickerpack;
+use crate::mxbot::state::write_room_state;
 use anyhow::bail;
 use heck::ToSnakeCase;
 use indexmap::IndexMap;
@@ -9,7 +10,7 @@ use reqwest::header::{ACCEPT, USER_AGENT};
 
 const MAX_CONTENT_LENGTH: usize = 50 * 1024;
 
-pub(super) async fn migrate(room: Joined, pack: &str) -> anyhow::Result<()> {
+pub(super) async fn migrate(room: &Joined, pack: &str) -> anyhow::Result<()> {
 	let mut response = reqwest::Client::new()
 		.get(pack)
 		.header(ACCEPT, "application/json")
@@ -32,19 +33,27 @@ pub(super) async fn migrate(room: Joined, pack: &str) -> anyhow::Result<()> {
 	let mut id = maunium_pack.id.to_snake_case();
 	id.retain(|ch| ch.is_alphanumeric());
 
-	if read_stickerpack(&room, &id).await?.is_some() {
+	if read_stickerpack(room, &id).await?.is_some() {
 		info!("Skipping import of {id} sticker pack");
 		return Ok(());
 	}
 
-	let stickerpack = ponies::StickerPack {
+	let mut stickerpack = ponies::StickerPack {
 		images: IndexMap::new(),
 		pack: ponies::PackInfo {
 			display_name: maunium_pack.title,
 			avatar_url: None
 		}
 	};
-	for sticker in maunium_pack.stickers {}
+	for sticker in maunium_pack.stickers {
+		stickerpack.images.insert(sticker.id, ponies::Sticker {
+			body: sticker.body,
+			info: sticker.info.image_info,
+			url: sticker.url,
+			usage: [ponies::Usage::Sticker].into_iter().collect()
+		});
+	}
 
-	bail!("unimplemented")
+	write_room_state(room, "im.ponies.room_emotes", Some(&id), stickerpack).await?;
+	Ok(())
 }

@@ -65,7 +65,7 @@ async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Clien
 	}
 }
 
-async fn send(room: Joined, content: impl MessageLikeEventContent) {
+async fn send(room: &Joined, content: impl MessageLikeEventContent) {
 	let room_id = room.room_id();
 	match room.send(content, None).await {
 		Ok(_) => info!("Sent message to room {room_id}"),
@@ -74,7 +74,7 @@ async fn send(room: Joined, content: impl MessageLikeEventContent) {
 }
 
 async fn reply(
-	room: Joined,
+	room: &Joined,
 	ev: OriginalSyncRoomMessageEvent,
 	content: RoomMessageEventContent
 ) {
@@ -86,7 +86,7 @@ async fn reply(
 	.await;
 }
 
-async fn react(room: Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
+async fn react(room: &Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
 	send(
 		room,
 		ReactionEventContent::new(Annotation::new(ev.event_id, body.to_owned()))
@@ -95,7 +95,7 @@ async fn react(room: Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
 }
 
 async fn enqueue_impl(
-	room: Joined,
+	room: &Joined,
 	ev: OriginalSyncRoomMessageEvent,
 	job: Job
 ) -> anyhow::Result<()> {
@@ -110,7 +110,7 @@ async fn enqueue_impl(
 	Ok(())
 }
 
-async fn enqueue(room: Joined, ev: OriginalSyncRoomMessageEvent, job: Job) {
+async fn enqueue(room: &Joined, ev: OriginalSyncRoomMessageEvent, job: Job) {
 	match enqueue_impl(room, ev, job).await {
 		Ok(_) => info!("Sucessfully enqueued job"),
 		Err(err) => error!("Error enqueueing job: {err}")
@@ -136,7 +136,7 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 		// help message
 		if body == "!help" {
 			reply(
-				room,
+				&room,
 				ev,
 				RoomMessageEventContent::text_html(
 					indoc! {r#"
@@ -173,11 +173,11 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 		}
 		// import tg sticker pack
 		else if let Some(pack) = body.strip_prefix("!import ") {
-			enqueue(room, ev, Job::Import(pack.to_owned())).await;
+			enqueue(&room, ev, Job::Import(pack.to_owned())).await;
 		}
 		// import maunium sticker pack
 		else if let Some(pack) = body.strip_prefix("!migrate ") {
-			enqueue(room, ev, Job::Migrate(pack.to_owned())).await;
+			enqueue(&room, ev, Job::Migrate(pack.to_owned())).await;
 		}
 		// clear the queue
 		else if body == "!clear queue" && is_admin(&ev.sender) {
@@ -188,12 +188,12 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 					"🟥"
 				}
 			};
-			react(room, ev, emoji).await;
+			react(&room, ev, emoji).await;
 		}
 		// unknown command
 		else {
 			reply(
-				room,
+				&room,
 				ev,
 				RoomMessageEventContent::text_plain(
 					"Unknown command. Use !help to see a list of all commands"
@@ -211,8 +211,10 @@ async fn run_queued_job(client: &Client, job: &QueuedJob) -> anyhow::Result<()> 
 
 	match &job.job {
 		Job::Import(pack) => import(client, pack).await?,
-		Job::Migrate(pack) => migrate(room, pack).await?
+		Job::Migrate(pack) => migrate(&room, pack).await?
 	};
+
+	react(&room, job.ev.clone().into(), "✅").await;
 
 	Ok(())
 }
