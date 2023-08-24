@@ -33,4 +33,4 @@ default-features = false
 
 [dependencies.mstickerlib]
 git = "https://github.com/luckyturtledev/mstickereditor"
-rev = "c0353b1188d2a48711e6904e602514e877e44d02"
+rev = "2d0bfbaf50c76b790d918a6428e454418e4f5753"
