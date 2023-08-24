@@ -2093,6 +2093,7 @@ dependencies = [
  "monostate",
  "mstickerlib",
  "once_cell",
+ "parking_lot",
  "pretty_env_logger",
  "reqwest",
  "ruma",
