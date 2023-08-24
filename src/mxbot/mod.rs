@@ -212,7 +212,7 @@ async fn run_queued_job(client: &Client, job: &QueuedJob) -> anyhow::Result<()> 
 	};
 
 	let res = match &job.job {
-		Job::Import(pack) => import(client, pack).await,
+		Job::Import(pack) => import(&room, pack).await,
 		Job::Migrate(pack) => migrate(&room, pack).await
 	};
 

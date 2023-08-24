@@ -24,7 +24,8 @@ env! {
 	ADMIN,
 	HOMESERVER,
 	MATRIX_ID,
-	PASSWORD
+	PASSWORD,
+	TG_BOT_TOKEN
 }
 
 #[tokio::main]

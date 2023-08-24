@@ -1233,9 +1233,10 @@ dependencies = [
 [[package]]
 name = "mstickerlib"
 version = "0.0.1"
-source = "git+https://github.com/luckyturtledev/mstickereditor?rev=2d0bfbaf50c76b790d918a6428e454418e4f5753#2d0bfbaf50c76b790d918a6428e454418e4f5753"
+source = "git+https://github.com/luckyturtledev/mstickereditor?rev=5547a899b74cc8b4bdfaa89cfa15088c6ab9c227#5547a899b74cc8b4bdfaa89cfa15088c6ab9c227"
 dependencies = [
  "anyhow",
+ "async-trait",
  "colored",
  "flate2",
  "futures-util",
@@ -1256,6 +1257,7 @@ dependencies = [
  "strum_macros",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "url",
 ]
 
@@ -2083,6 +2085,7 @@ name = "tg2mx-bot"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "dotenvy",
  "futures-util",
  "heck",
@@ -2093,7 +2096,6 @@ dependencies = [
  "monostate",
  "mstickerlib",
  "once_cell",
- "parking_lot",
  "pretty_env_logger",
  "reqwest",
  "ruma",

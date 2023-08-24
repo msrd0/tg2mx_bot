@@ -15,6 +15,7 @@ use matrix_sdk::{
 };
 use monostate::MustBe;
 use mstickerlib::{database, get_client, matrix::sticker_formats::ponies};
+use reqwest::StatusCode;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{borrow::Borrow, collections::VecDeque};
 
@@ -28,20 +29,30 @@ where
 	let response = get_client()
 		.await
 		.get(format!(
-			"{}_matrix/client/v3/user/{}/account_data/{key}?access_token={}",
+			"{}_matrix/client/v3/user/{}/account_data/{key}",
 			client.homeserver().await,
 			client
 				.user_id()
 				.ok_or_else(|| anyhow!("How can we not have a user id?"))?,
-			client
-				.access_token()
-				.ok_or_else(|| anyhow!("How can we not have an access token?"))?
 		))
+		.header(
+			"Authorization",
+			format!(
+				"Bearer {}",
+				client
+					.access_token()
+					.ok_or_else(|| anyhow!("How can we not have an access token?"))?
+			)
+		)
 		.send()
-		.await?
-		.error_for_status()?
-		.bytes()
 		.await?;
+
+	// ignore 404 errors - they indicate that the account data does not exist
+	if response.status() == StatusCode::NOT_FOUND {
+		return Ok(Ok(None));
+	}
+
+	let response = response.error_for_status()?.bytes().await?;
 	Ok(serde_json::from_slice(&response))
 }
 
