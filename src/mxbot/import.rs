@@ -9,7 +9,7 @@ use matrix_sdk::room::Joined;
 use mstickerlib::{
 	image::AnimationFormat,
 	matrix::{self, sticker_formats::ponies},
-	tg
+	tg::{self, ImportConfig}
 };
 
 pub(super) async fn import(room: &Joined, pack: &str) -> anyhow::Result<()> {
@@ -46,20 +46,24 @@ pub(super) async fn import(room: &Joined, pack: &str) -> anyhow::Result<()> {
 		.context("Failed to load the sticker pack from telegram")?;
 
 	// import the pack to matrix
-	let (matrix_pack, errors) = sticker_pack
-		.import(
-			Some(AnimationFormat::Webp),
-			Some(&db),
-			&tg_config,
-			&matrix_config
-		)
-		.await;
+	let mut import_config = ImportConfig::default();
+	import_config.animation_format = Some(AnimationFormat::Webp);
+	import_config.database = Some(&db);
+	let matrix_pack = match sticker_pack
+		.import(&tg_config, &matrix_config, &import_config)
+		.await
+	{
+		Ok(matrix_pack) => matrix_pack,
+		Err((matrix_pack, errors)) => {
+			// print warnings for those stickers from the set that were ignored
+			// TODO these warnings should be printed to matrix
+			for (i, err) in errors {
+				warn!("Failed to import sticker {i}: {err:?}");
+			}
 
-	// print warnings for those stickers from the set that were ignored
-	// TODO these warnings should be printed to matrix
-	for (i, err) in errors {
-		warn!("Failed to import sticker {i}: {err:?}");
-	}
+			matrix_pack
+		}
+	};
 
 	let ponies: ponies::StickerPack = matrix_pack.into();
 	write_room_state(room, "im.ponies.room_emotes", Some(&id), ponies)
