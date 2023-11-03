@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use indexmap::IndexMap;
 use log::{error, info};
 use matrix_sdk::{
-	room::Joined,
+	room::Room,
 	ruma::{
 		events::{
 			room::message::OriginalRoomMessageEvent, MessageLikeEventContent,
@@ -30,7 +30,7 @@ where
 		.await
 		.get(format!(
 			"{}_matrix/client/v3/user/{}/account_data/{key}",
-			client.homeserver().await,
+			client.homeserver(),
 			client
 				.user_id()
 				.ok_or_else(|| anyhow!("How can we not have a user id?"))?,
@@ -72,7 +72,7 @@ where
 }
 
 pub(super) async fn read_room_state<T>(
-	room: &Joined,
+	room: &Room,
 	key: &str,
 	state_key: Option<&str>
 ) -> anyhow::Result<serde_json::Result<Option<T>>>
@@ -86,7 +86,7 @@ where
 }
 
 pub(super) async fn write_room_state<T>(
-	room: &Joined,
+	room: &Room,
 	key: &str,
 	state_key: Option<&str>,
 	content: T

@@ -4,7 +4,7 @@ use indoc::indoc;
 use log::{error, info, warn};
 use matrix_sdk::{
 	config::SyncSettings,
-	room::{Joined, Room},
+	room::Room,
 	ruma::events::{
 		room::{
 			member::StrippedRoomMemberEvent,
@@ -67,7 +67,7 @@ async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Clien
 	}
 }
 
-async fn send(room: &Joined, content: impl MessageLikeEventContent) {
+async fn send(room: &Room, content: impl MessageLikeEventContent) {
 	let room_id = room.room_id();
 	match room.send(content, None).await {
 		Ok(_) => info!("Sent message to room {room_id}"),
@@ -76,7 +76,7 @@ async fn send(room: &Joined, content: impl MessageLikeEventContent) {
 }
 
 async fn reply(
-	room: &Joined,
+	room: &Room,
 	ev: OriginalSyncRoomMessageEvent,
 	content: RoomMessageEventContent
 ) {
@@ -88,7 +88,7 @@ async fn reply(
 	.await;
 }
 
-async fn react(room: &Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
+async fn react(room: &Room, ev: OriginalSyncRoomMessageEvent, body: &str) {
 	send(
 		room,
 		ReactionEventContent::new(Annotation::new(ev.event_id, body.to_owned()))
@@ -97,7 +97,7 @@ async fn react(room: &Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
 }
 
 async fn enqueue_impl(
-	room: &Joined,
+	room: &Room,
 	ev: OriginalSyncRoomMessageEvent,
 	job: Job
 ) -> anyhow::Result<()> {
@@ -112,7 +112,7 @@ async fn enqueue_impl(
 	Ok(())
 }
 
-async fn enqueue(room: &Joined, ev: OriginalSyncRoomMessageEvent, job: Job) {
+async fn enqueue(room: &Room, ev: OriginalSyncRoomMessageEvent, job: Job) {
 	match enqueue_impl(room, ev, job).await {
 		Ok(_) => info!("Sucessfully enqueued job"),
 		Err(err) => error!("Error enqueueing job: {err}")
