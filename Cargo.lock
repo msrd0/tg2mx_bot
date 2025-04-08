@@ -1485,8 +1485,7 @@ dependencies = [
 [[package]]
 name = "mstickerlib"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47b0d0a1fdcefcb3d32a81e01bd70cb13c157dc1b5cb561fa48c27342003ea93"
+source = "git+https://github.com/LuckyTurtleDev/mstickereditor?rev=45ff229#45ff229b8309b51e8a55ba54a3d58d685bda6376"
 dependencies = [
  "anyhow",
  "derive-getters",
