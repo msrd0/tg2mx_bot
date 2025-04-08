@@ -47,7 +47,7 @@ pub(super) async fn import(room: &Joined, pack: &str) -> anyhow::Result<()> {
 
 	// import the pack to matrix
 	let mut import_config = ImportConfig::default();
-	import_config.animation_format = Some(AnimationFormat::Webp);
+	import_config.animation_format = AnimationFormat::Webp;
 	import_config.database = Some(&db);
 	let matrix_pack = match sticker_pack
 		.import(&tg_config, &matrix_config, &import_config)

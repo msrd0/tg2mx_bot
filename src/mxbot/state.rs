@@ -27,7 +27,6 @@ where
 	T: DeserializeOwned
 {
 	let response = get_client()
-		.await
 		.get(format!(
 			"{}_matrix/client/v3/user/{}/account_data/{key}",
 			client.homeserver().await,

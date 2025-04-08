@@ -26,11 +26,11 @@ impl AccountDataDatabase {
 	}
 }
 
-#[async_trait]
+//#[async_trait]
 impl Database for AccountDataDatabase {
-	async fn get(&self, hash: &database::Hash) -> Option<String> {
+	async fn get(&self, hash: &database::Hash) -> anyhow::Result<Option<String>> {
 		let map = self.map.read().await;
-		map.map.get(hash).map(|cache| cache.url.clone())
+		Ok(map.map.get(hash).map(|cache| cache.url.clone()))
 	}
 
 	async fn add(&self, hash: database::Hash, url: String) -> anyhow::Result<()> {
