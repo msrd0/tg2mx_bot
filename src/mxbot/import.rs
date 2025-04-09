@@ -5,14 +5,14 @@ use crate::{
 use anyhow::{anyhow, Context as _};
 use heck::ToSnakeCase;
 use log::{error, warn};
-use matrix_sdk::room::Joined;
+use matrix_sdk::room::Room;
 use mstickerlib::{
 	image::AnimationFormat,
 	matrix::{self, sticker_formats::ponies},
 	tg::{self, ImportConfig}
 };
 
-pub(super) async fn import(room: &Joined, pack: &str) -> anyhow::Result<()> {
+pub(super) async fn import(room: &Room, pack: &str) -> anyhow::Result<()> {
 	let pack = tg::pack_url_to_name(pack).context("Invalid sticker pack url")?;
 	let mut id = pack.to_snake_case();
 	id.retain(|ch| ch.is_alphanumeric());
@@ -25,7 +25,7 @@ pub(super) async fn import(room: &Joined, pack: &str) -> anyhow::Result<()> {
 	// config to connect to matrix
 	let client = room.client();
 	let matrix_config = matrix::Config {
-		homeserver_url: client.homeserver().await.to_string(),
+		homeserver_url: client.homeserver().to_string(),
 		user: client
 			.user_id()
 			.ok_or_else(|| anyhow!("Unable to obtain my own matrix user id"))?

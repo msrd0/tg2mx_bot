@@ -1,5 +1,4 @@
 use super::state::{read_media_map, write_media_map, MediaCache, MediaHash, MediaMap};
-use async_trait::async_trait;
 use matrix_sdk::Client;
 use mstickerlib::database::{self, Database};
 use std::sync::Arc;

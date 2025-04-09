@@ -2,7 +2,8 @@ use anyhow::anyhow;
 use indexmap::IndexMap;
 use log::{error, info};
 use matrix_sdk::{
-	room::Joined,
+	deserialized_responses::RawAnySyncOrStrippedState,
+	room::Room,
 	ruma::{
 		events::{
 			room::message::OriginalRoomMessageEvent, MessageLikeEventContent,
@@ -29,7 +30,7 @@ where
 	let response = get_client()
 		.get(format!(
 			"{}_matrix/client/v3/user/{}/account_data/{key}",
-			client.homeserver().await,
+			client.homeserver(),
 			client
 				.user_id()
 				.ok_or_else(|| anyhow!("How can we not have a user id?"))?,
@@ -71,7 +72,7 @@ where
 }
 
 pub(super) async fn read_room_state<T>(
-	room: &Joined,
+	room: &Room,
 	key: &str,
 	state_key: Option<&str>
 ) -> anyhow::Result<serde_json::Result<Option<T>>>
@@ -81,11 +82,16 @@ where
 	let ev = room
 		.get_state_event(key.into(), state_key.unwrap_or_default())
 		.await?;
-	Ok(ev.map(|ev| ev.deserialize_as()).transpose())
+	Ok(ev
+		.map(|ev| match ev {
+			RawAnySyncOrStrippedState::Sync(raw) => raw.deserialize_as(),
+			RawAnySyncOrStrippedState::Stripped(raw) => raw.deserialize_as()
+		})
+		.transpose())
 }
 
 pub(super) async fn write_room_state<T>(
-	room: &Joined,
+	room: &Room,
 	key: &str,
 	state_key: Option<&str>,
 	content: T
@@ -94,9 +100,9 @@ where
 	T: Serialize
 {
 	room.send_state_event_raw(
-		serde_json::to_value(&content)?,
 		key,
-		state_key.unwrap_or("")
+		state_key.unwrap_or(""),
+		serde_json::to_value(&content)?
 	)
 	.await?;
 	Ok(())
@@ -151,9 +157,8 @@ pub(super) async fn read_queue(client: &Client) -> anyhow::Result<Queue> {
 			error!("Failed to deserialize account data: {err}");
 			None
 		})
-		.map(|q: Queue| {
+		.inspect(|q: &Queue| {
 			info!("Read queue with {} jobs", q.q.len());
-			q
 		})
 		.unwrap_or_default())
 }
@@ -206,7 +211,7 @@ pub(super) async fn write_media_map(
 }
 
 pub(super) async fn read_stickerpack(
-	room: &Joined,
+	room: &Room,
 	name: &str
 ) -> anyhow::Result<Option<ponies::StickerPack>> {
 	Ok(read_room_state(room, "im.ponies.room_emotes", Some(name)).await??)

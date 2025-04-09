@@ -4,13 +4,13 @@ use anyhow::{bail, Context as _};
 use heck::ToSnakeCase;
 use indexmap::IndexMap;
 use log::info;
-use matrix_sdk::room::Joined;
+use matrix_sdk::room::Room;
 use mstickerlib::matrix::sticker_formats::{maunium, ponies};
 use reqwest::header::{ACCEPT, USER_AGENT};
 
 const MAX_CONTENT_LENGTH: usize = 100 * 1024;
 
-pub(super) async fn migrate(room: &Joined, pack: &str) -> anyhow::Result<()> {
+pub(super) async fn migrate(room: &Room, pack: &str) -> anyhow::Result<()> {
 	let mut response = reqwest::Client::new()
 		.get(pack)
 		.header(ACCEPT, "application/json")

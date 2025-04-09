@@ -4,7 +4,7 @@ use indoc::indoc;
 use log::{error, info, warn};
 use matrix_sdk::{
 	config::SyncSettings,
-	room::{Joined, Room},
+	room::Room,
 	ruma::events::{
 		room::{
 			member::StrippedRoomMemberEvent,
@@ -15,10 +15,12 @@ use matrix_sdk::{
 		},
 		MessageLikeEventContent
 	},
-	Client
+	Client, RoomState
 };
 use ruma::{
-	events::{reaction::ReactionEventContent, relation::Annotation},
+	events::{
+		reaction::ReactionEventContent, relation::Annotation, room::message::AddMentions
+	},
 	UserId
 };
 use std::time::Duration;
@@ -49,46 +51,53 @@ async fn autojoin_handler(ev: StrippedRoomMemberEvent, room: Room, client: Clien
 		return;
 	}
 
-	if let Room::Invited(room) = room {
-		let room_id = room.room_id();
+	// ignore non-invitations
+	if room.state() != RoomState::Invited {
+		return;
+	}
 
-		// ignore events that weren't sent by an admin
-		if !is_admin(&ev.sender) {
-			warn!("Rejecting invitation for {room_id}");
-			room.reject_invitation().await.ok();
-		}
-		// otherwise, the event was sent by an admin so we join the room
-		else {
-			match room.accept_invitation().await {
-				Ok(_) => info!("Successfully joined room {room_id}"),
-				Err(err) => error!("Error joining room {room_id}: {err}")
-			}
+	let room_id = room.room_id();
+
+	// ignore events that weren't sent by an admin
+	if !is_admin(&ev.sender) {
+		warn!("Rejecting invitation for {room_id}");
+		room.leave().await.ok();
+	}
+	// otherwise, the event was sent by an admin so we join the room
+	else {
+		match room.join().await {
+			Ok(_) => info!("Successfully joined room {room_id}"),
+			Err(err) => error!("Error joining room {room_id}: {err}")
 		}
 	}
 }
 
-async fn send(room: &Joined, content: impl MessageLikeEventContent) {
+async fn send(room: &Room, content: impl MessageLikeEventContent) {
 	let room_id = room.room_id();
-	match room.send(content, None).await {
+	match room.send(content).await {
 		Ok(_) => info!("Sent message to room {room_id}"),
 		Err(err) => error!("Error sending message to room {room_id}: {err}")
 	}
 }
 
 async fn reply(
-	room: &Joined,
+	room: &Room,
 	ev: OriginalSyncRoomMessageEvent,
 	content: RoomMessageEventContent
 ) {
 	let room_id = room.room_id().to_owned();
 	send(
 		room,
-		content.make_reply_to(&ev.into_full_event(room_id), ForwardThread::Yes)
+		content.make_reply_to(
+			&ev.into_full_event(room_id),
+			ForwardThread::Yes,
+			AddMentions::Yes
+		)
 	)
 	.await;
 }
 
-async fn react(room: &Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
+async fn react(room: &Room, ev: OriginalSyncRoomMessageEvent, body: &str) {
 	send(
 		room,
 		ReactionEventContent::new(Annotation::new(ev.event_id, body.to_owned()))
@@ -97,7 +106,7 @@ async fn react(room: &Joined, ev: OriginalSyncRoomMessageEvent, body: &str) {
 }
 
 async fn enqueue_impl(
-	room: &Joined,
+	room: &Room,
 	ev: OriginalSyncRoomMessageEvent,
 	job: Job
 ) -> anyhow::Result<()> {
@@ -112,7 +121,7 @@ async fn enqueue_impl(
 	Ok(())
 }
 
-async fn enqueue(room: &Joined, ev: OriginalSyncRoomMessageEvent, job: Job) {
+async fn enqueue(room: &Room, ev: OriginalSyncRoomMessageEvent, job: Job) {
 	match enqueue_impl(room, ev, job).await {
 		Ok(_) => info!("Sucessfully enqueued job"),
 		Err(err) => error!("Error enqueueing job: {err}")
@@ -125,23 +134,22 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 		return;
 	}
 
-	if let Room::Joined(room) = room {
-		let MessageType::Text(text_content) = ev.content.msgtype.clone() else {
-			return;
-		};
+	let MessageType::Text(text_content) = ev.content.msgtype.clone() else {
+		return;
+	};
 
-		let body = text_content.body.trim_end();
-		if !body.starts_with('!') {
-			return;
-		}
+	let body = text_content.body.trim_end();
+	if !body.starts_with('!') {
+		return;
+	}
 
-		// help message
-		if body == "!help" {
-			reply(
-				&room,
-				ev,
-				RoomMessageEventContent::text_html(
-					indoc! {r#"
+	// help message
+	if body == "!help" {
+		reply(
+			&room,
+			ev,
+			RoomMessageEventContent::text_html(
+				indoc! {r#"
 						This is tg2mx_bot, a bot that can import sticker packs from
 						telegram and migrate maunium's sticker packs to MSC2545 room
 						sticker packs.
@@ -154,7 +162,7 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 
 						!migrate <pack>  --  Migrate a maunium sticker pack.
 					"#},
-					indoc! {r#"
+				indoc! {r#"
 						<p>This is tg2mx_bot, a bot that can import sticker packs from
 						telegram and migrate maunium's sticker packs to MSC2545 room
 						sticker packs.</p>
@@ -169,45 +177,44 @@ async fn message_handler(ev: OriginalSyncRoomMessageEvent, room: Room, client: C
 						      sticker pack.</li>
 						</ul>
 					"#}
-				)
 			)
-			.await;
-		}
-		// import tg sticker pack
-		else if let Some(pack) = body.strip_prefix("!import ") {
-			enqueue(&room, ev, Job::Import(pack.to_owned())).await;
-		}
-		// import maunium sticker pack
-		else if let Some(pack) = body.strip_prefix("!migrate ") {
-			enqueue(&room, ev, Job::Migrate(pack.to_owned())).await;
-		}
-		// clear the queue
-		else if body == "!clear queue" && is_admin(&ev.sender) {
-			let emoji = match write_queue(&client, &Queue::default()).await {
-				Ok(_) => "✅",
-				Err(err) => {
-					error!("Failed to clear queue: {err}");
-					"🟥"
-				}
-			};
-			react(&room, ev, emoji).await;
-		}
-		// unknown command
-		else {
-			reply(
-				&room,
-				ev,
-				RoomMessageEventContent::text_plain(
-					"Unknown command. Use !help to see a list of all commands"
-				)
+		)
+		.await;
+	}
+	// import tg sticker pack
+	else if let Some(pack) = body.strip_prefix("!import ") {
+		enqueue(&room, ev, Job::Import(pack.to_owned())).await;
+	}
+	// import maunium sticker pack
+	else if let Some(pack) = body.strip_prefix("!migrate ") {
+		enqueue(&room, ev, Job::Migrate(pack.to_owned())).await;
+	}
+	// clear the queue
+	else if body == "!clear queue" && is_admin(&ev.sender) {
+		let emoji = match write_queue(&client, &Queue::default()).await {
+			Ok(_) => "✅",
+			Err(err) => {
+				error!("Failed to clear queue: {err}");
+				"🟥"
+			}
+		};
+		react(&room, ev, emoji).await;
+	}
+	// unknown command
+	else {
+		reply(
+			&room,
+			ev,
+			RoomMessageEventContent::text_plain(
+				"Unknown command. Use !help to see a list of all commands"
 			)
-			.await;
-		}
+		)
+		.await;
 	}
 }
 
 async fn run_queued_job(client: &Client, job: &QueuedJob) -> anyhow::Result<()> {
-	let Some(Room::Joined(room)) = client.get_room(&job.ev.room_id) else {
+	let Some(room) = client.get_room(&job.ev.room_id) else {
 		bail!("Failed to find room for job {job:?}")
 	};
 
@@ -254,6 +261,7 @@ pub(super) async fn run() -> anyhow::Result<()> {
 		.build()
 		.await?;
 	client
+		.matrix_auth()
 		.login_username(MATRIX_ID.as_deref().unwrap(), PASSWORD.as_deref().unwrap())
 		.initial_device_display_name("tg2mx bot")
 		.send()
