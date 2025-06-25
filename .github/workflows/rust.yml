@@ -13,11 +13,11 @@ env:
   RUST_BACKTRACE: "1"
   RUST_LOG: "info"
   # speed up build by using clang/lld
-  CC: "clang-14"
-  CXX: "clang++-14"
-  LD: "clang-14"
-  LDFLAGS: "-fuse-ld=lld-14"
-  RUSTFLAGS: "-C linker=clang-14 -C link-arg=-fuse-ld=lld-14"
+  CC: "clang"
+  CXX: "clang++"
+  LD: "clang"
+  LDFLAGS: "-fuse-ld=lld"
+  RUSTFLAGS: "-C linker=clang -C link-arg=-fuse-ld=lld"
 
 jobs:
   test:
@@ -30,7 +30,7 @@ jobs:
     name: "Test (Rust ${{matrix.rust.toolchain}})"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: msrd0/install-rlottie-action@v1
       - run: sudo apt update -y && sudo apt install -y libavdevice-dev
       - uses: dtolnay/rust-toolchain@master
@@ -38,7 +38,7 @@ jobs:
           toolchain: "${{matrix.rust.toolchain}}"
         id: "rust-toolchain"
       
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/git
@@ -51,7 +51,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
